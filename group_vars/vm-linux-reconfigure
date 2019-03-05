@@ -1,0 +1,9 @@
+---
+vcenter_host: vcenter-ip
+vcenter_username: xxxx
+vcenter_password: xxxx
+datacenter_name: HamiltonDR
+esxi_hostname: esxi-ip
+datastore_name: xxxx
+cpu: 4
+mem_mb: 3072

@@ -1,0 +1,14 @@
+---
+vcenter_host: xxxxx
+vcenter_username: xxx
+vcenter_password: xxxx
+datacenter: HamiltonDR
+folder: /vm
+vmtemplate: oracle-linux-test
+esxi_host: xxxx
+cpu: 1
+mem_mb: 2048
+disk: 50
+datastore: datacenter name
+v_username: vm username
+v_password: password

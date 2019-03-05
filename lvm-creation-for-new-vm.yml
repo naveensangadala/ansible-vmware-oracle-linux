@@ -1,0 +1,42 @@
+- name: create volumes for the new server
+  hosts: new-vm-ip
+  user: root
+  gather_facts: false
+  tasks:
+    - name: check lvs command
+      command: lvs
+
+    - name: Remove the logical volume.
+      lvol:
+        vg: app_vg
+        lv: app_lv
+        state: absent
+        force: yes
+
+    - name: Create a volume group on top of /dev/sdb with physical extent size 90g
+      lvg:
+       vg: app_vg
+       pvs: /dev/sdb
+       pesize: 99g
+       state: present
+      become: yes
+
+    - name: lv create
+      lvol:
+       vg: app_vg
+       lv: app_lv
+       size: 100%FREE
+      become: yes
+
+    - filesystem:
+       fstype: ext4
+       dev: /dev/app_vg/app_lv
+      become: yes
+
+    - mount:
+       name: app_lv
+       fstype: ext4
+       src: /dev/app_vg/app_lv
+       state: mounted
+      become: yes
+   

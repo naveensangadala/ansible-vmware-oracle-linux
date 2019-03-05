@@ -1,0 +1,31 @@
+- name: create volumes for the new server
+  hosts: new-vm-ip
+  user: root
+  gather_facts: false
+  tasks:
+    - parted:
+         device: /dev/sdc
+         label: msdos
+         part_type: primary
+         part_start: 0%
+         part_end: 100%
+         number: 1
+         state: present
+      register: sdc
+
+    - name: create asm disks
+      command: oracleasm createdisk ASM1 /dev/sdc1
+    - parted:
+         device: /dev/sdd
+         label: msdos
+         part_type: primary
+         part_start: 0%
+         part_end: 100%
+         number: 1
+         state: present
+      register: sdd
+   
+    - name: create asm disks
+      command: oracleasm createdisk ASM2 /dev/sdd1
+
+ 

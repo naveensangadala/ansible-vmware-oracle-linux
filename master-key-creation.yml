@@ -1,0 +1,58 @@
+- name: create keys root user
+  hosts: new-vm-ip
+  user: root
+  gather_facts: false
+  tasks:
+    - name: generate ssh keys for root user
+      shell: ssh-keygen -t rsa -f /root/.ssh/id_rsa -q -N ""
+      become: yes
+      become_user: root
+      args:
+         creates: /root/.ssh/id_rsa
+      register: ssh_keys
+
+    - name: retrieve pub key
+      shell: cat /root/.ssh/id_rsa.pub
+      register: pub_key
+
+    - name: check keys
+      debug: 
+        msg: "{{ pub_key.stdout}}"
+
+    - set_fact: keys = "{{ pub_key.stdout }}"
+
+    - name: create authorized keys file
+      file:
+        path: "/root/.ssh/authorized_keys"
+        state: touch
+
+    - name: copy pubkey authorized_keys of root
+      copy:
+         src: /root/.ssh/id_rsa.pub
+         dest: /root/.ssh/authorized_keys
+         owner: root
+         group: root
+         mode: 0644
+         remote_src: yes
+#         force: no
+#         register: pubkey-target
+
+- name: copy keys
+  hosts: local-machine-ip
+  user: nsangadala
+  gather_facts: false
+  tasks:
+    - name: check keys
+      debug: 
+        var: hostvars['new-vm-ip']['pub_key']['stdout']
+
+
+    - name: print result
+      debug: 
+        msg: "{{ hostvars['new-vm-ip']['pub_key']['stdout'] }}"
+
+    - name: put key into a file
+      lineinfile: 
+        line: "{{ hostvars['new-vm-ip']['pub_key']['stdout'] }}" 
+        path: /home/nsangadala/.ssh/authorized_keys
+

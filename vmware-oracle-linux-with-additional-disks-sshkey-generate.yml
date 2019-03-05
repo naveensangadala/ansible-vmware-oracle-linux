@@ -1,0 +1,154 @@
+- name: 'VMWARE PROVISION | Creating  {{ostype}} VM with {{config}} configuration Name: {{vmname}}'
+  hosts: vm-linux
+  gather_facts: false
+  vars_files:
+      - group_vars/{{ostype}}/{{config}}.yml
+  tasks:
+    - name: "PROVISION | Create Linux {{vmname}} from template {{ostype}} {{config}}"
+      vmware_guest:
+       validate_certs: false
+       hostname: "{{ vcenter_host }}"
+       username: "{{ vcenter_username }}"
+       password: "{{ vcenter_password }}"
+       datacenter: "{{ datacenter }}"
+       name: "{{ vmname }}"
+       folder: "{{ folder }}"
+       template: "{{ vmtemplate }}"
+       state: poweredon
+       esxi_hostname: "{{ esxi_host }}"
+       hardware:
+         num_cpus: "{{ cpu }}"
+         memory_mb: "{{ mem_mb }}"
+       disk:
+         - size_gb: "{{ disk }}"
+           type: thin
+           datastore: "{{ datastore }}"
+         - size_gb: 100
+           type: thin
+           datastore: "{{ datastore }}"
+         - size_gb: 20
+           type: thin
+           datastore: "{{ datastore }}"
+         - size_gb: 100
+           type: thin
+           datastore: "{{ datastore }}"
+      register: new_vm
+    - name: wait for VMware tools to become available
+      vmware_guest_tools_wait:
+        validate_certs: false
+        hostname: "{{ vcenter_host }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        name: "{{ vmname }}"
+        folder: "/{{ datacenter }}/vm/{{ folder }}"    
+      register: new_vm_ip
+
+    - name: "NETWORK | Set the IP address and Netmask"
+      local_action:
+       module: vmware_vm_shell
+       hostname: "{{ vcenter_host }}"
+       username: "{{ vcenter_username }}"
+       password: "{{ vcenter_password }}"
+       datacenter: "{{ datacenter }}"
+       vm_id: "{{ vmname }}"
+       vm_username: "{{ v_username }}"
+       vm_password: "{{ v_password }}"
+       vm_shell: /usr/sbin/ifconfig
+       vm_shell_args: " eth0 enter-ipaddress netmask enter-netmask-ip "
+       vm_shell_env:
+         - "PATH=/bin"
+       vm_shell_cwd: "/tmp"
+       validate_certs: False
+    - name: "NETWORK | add the default gateway"
+      local_action:
+       module: vmware_vm_shell
+       hostname: "{{ vcenter_host }}"
+       username: "{{ vcenter_username }}"
+       password: "{{ vcenter_password }}"
+       datacenter: "{{ datacenter }}"
+       vm_id: "{{ vmname }}"
+       vm_username: "{{ v_username }}"
+       vm_password: "{{ v_password }}"
+       vm_shell: /usr/sbin/route
+       vm_shell_args: " add default gw enter-gateway-ip "
+       vm_shell_env:
+         - "PATH=/bin"
+       vm_shell_cwd: "/tmp"
+       validate_certs: False
+#    - name: "NETWORK | add the nameserver"
+#      local_action:
+#       module: vmware_vm_shell
+#       hostname: "{{ vcenter_host }}"
+#       username: "{{ vcenter_username }}"
+#       password: "{{ vcenter_password }}"
+#       datacenter: "{{ datacenter }}"
+#       vm_id: "{{ vmname }}"
+#       vm_username: "{{ v_username }}"
+#       vm_password: "{{ v_password }}"
+#       vm_shell: /usr/bin/echo
+#       vm_shell_args: " nameserver add-name-server-ip >> /etc/resolv.conf "
+#       vm_shell_env:
+#         - "PATH=/bin"
+#       vm_shell_cwd: "/tmp"
+#       validate_certs: False
+    - name: "NETWORK | adding IP details to ifcfg-eth0"
+      local_action:
+       module: vmware_vm_shell
+       hostname: "{{ vcenter_host }}"
+       username: "{{ vcenter_username }}"
+       password: "{{ vcenter_password }}"
+       datacenter: "{{ datacenter }}"
+       vm_id: "{{ vmname }}"
+       vm_username: "{{ v_username }}"
+       vm_password: "{{ v_password }}"
+       vm_shell: /usr/bin/echo
+       vm_shell_args: -e "IPADDR=xxxxxx\nNETMASK=xxxxxx\nGATEWAY=xxxxxx\nTYPE=Ethernet\nBOOTPROTO=static\nONBOOT=yes\nDEVICE=eth0\nNAME=eth0\nDEFROUTE=yes\n" > /etc/sysconfig/network-scripts/ifcfg-eth0
+       vm_shell_env:
+         - "PATH=/bin"
+       vm_shell_cwd: "/tmp"
+       validate_certs: False
+       
+    - name: add the new server IP address to hosts file
+      lineinfile: 
+           path: /home/nsangadala/database-playbooks/hosts
+           insertafter: '^\[localhost]\nip-address-of-loclmachine\n]'
+           regexp: '^\[localhost]'
+           line: '[zen06orc]'
+  
+    - name: add the new server IP address to hosts file
+      lineinfile: 
+           path: /home/nsangadala/database-playbooks/hosts
+           insertafter: '^\[zen06orc]\n'
+           regexp: '^\[zen06orc]\n'
+           line: 'new-vm-ip'
+
+    - name: retrieve pub key
+      shell: cat /home/nsangadala/.ssh/id_rsa.pub
+      register: root_key
+
+    - name: check keys
+      debug:
+        msg: "{{ root_key.stdout}}"
+
+    - set_fact: rootkeys = "{{ root_key.stdout }}"
+
+- import_playbook: master-key-creation.yml
+           
+- name: copy keys to root
+  hosts: new-vm-ip
+  user: root
+  gather_facts: false
+  tasks:
+    - name: check keys
+      debug:
+        var: hostvars['localmachine-ip']['root_key']['stdout']
+
+    - name: print result
+      debug:
+        msg: "{{ hostvars['localmachine-ip']['root_key']['stdout'] }}"
+
+    - name: put key into a file
+      lineinfile:
+        line:  "{{ hostvars['localmachine-ip']['root_key']['stdout'] }}"
+        path: /root/.ssh/authorized_keys
+
